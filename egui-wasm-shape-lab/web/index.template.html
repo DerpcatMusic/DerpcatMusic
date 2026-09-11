@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Visage — actual egui/Rust/WASM proof</title>
+<style>
+  html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0d1010}
+  #visage{display:block;width:100%;height:100%;touch-action:none;cursor:default}
+</style>
+</head>
+<body>
+<canvas id="visage"></canvas>
+<script type="module">
+const WASM_BASE64 = "__WASM_BASE64__";
+const canvas = document.getElementById('visage');
+const gl = canvas.getContext('webgl2', {alpha:false, antialias:true, premultipliedAlpha:true});
+if (!gl) throw new Error('WebGL2 required');
+
+const vs = `#version 300 es
+precision highp float;
+layout(location=0) in vec2 a_pos;
+layout(location=1) in vec4 a_color;
+uniform vec2 u_screen;
+out vec4 v_color;
+void main(){
+  vec2 p = a_pos / u_screen;
+  vec2 ndc = vec2(p.x * 2.0 - 1.0, 1.0 - p.y * 2.0);
+  gl_Position = vec4(ndc,0.0,1.0);
+  v_color = a_color;
+}`;
+const fs = `#version 300 es
+precision highp float;
+in vec4 v_color;
+out vec4 out_color;
+void main(){ out_color = v_color; }`;
+function shader(type,src){const s=gl.createShader(type);gl.shaderSource(s,src);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(s));return s}
+const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vs));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fs));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(program));
+const vao=gl.createVertexArray(), vbo=gl.createBuffer(), ibo=gl.createBuffer();
+gl.bindVertexArray(vao);gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.enableVertexAttribArray(0);gl.vertexAttribPointer(0,2,gl.FLOAT,false,24,0);gl.enableVertexAttribArray(1);gl.vertexAttribPointer(1,4,gl.FLOAT,false,24,8);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);
+gl.useProgram(program);const uScreen=gl.getUniformLocation(program,'u_screen');
+gl.enable(gl.BLEND);gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.CULL_FACE);
+
+function decode64(s){const raw=atob(s);const b=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)b[i]=raw.charCodeAt(i);return b}
+const bytes=decode64(WASM_BASE64);
+const {instance}=await WebAssembly.instantiate(bytes,{});
+const w=instance.exports;
+if(w.magic()!==0x45475549) throw new Error('Not the expected EGUI Rust WASM module');
+if(w.egui_version_code()!==0x00360002) throw new Error('Wrong egui build: expected 0.36.2');
+console.log('ACTUAL RUST/EGUI WASM ACTIVE', {magic:w.magic().toString(16), egui:'0.36.2', wasmBytes:bytes.byteLength});
+
+function cssPoint(e){const r=canvas.getBoundingClientRect();return [(e.clientX-r.left),(e.clientY-r.top)]}
+canvas.addEventListener('pointermove',e=>{const [x,y]=cssPoint(e);w.pointer_move(x,y)});
+canvas.addEventListener('pointerdown',e=>{canvas.setPointerCapture(e.pointerId);const [x,y]=cssPoint(e);w.pointer_move(x,y);w.pointer_button(x,y,e.button,1);e.preventDefault()});
+canvas.addEventListener('pointerup',e=>{const [x,y]=cssPoint(e);w.pointer_move(x,y);w.pointer_button(x,y,e.button,0);try{canvas.releasePointerCapture(e.pointerId)}catch{};e.preventDefault()});
+canvas.addEventListener('pointercancel',e=>{const [x,y]=cssPoint(e);w.pointer_button(x,y,e.button,0);w.pointer_gone()});
+canvas.addEventListener('pointerleave',e=>{if(!canvas.hasPointerCapture?.(e.pointerId))w.pointer_gone()});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+
+function render(now){
+  const dpr=Math.max(1,window.devicePixelRatio||1), cw=canvas.clientWidth, ch=canvas.clientHeight;
+  const pw=Math.max(1,Math.round(cw*dpr)), ph=Math.max(1,Math.round(ch*dpr));
+  if(canvas.width!==pw||canvas.height!==ph){canvas.width=pw;canvas.height=ph;gl.viewport(0,0,pw,ph)}
+  w.frame(cw,ch,now/1000);
+  const mem=w.memory.buffer;
+  const vf=new Float32Array(mem,w.vertices_ptr(),w.vertices_len());
+  const ix=new Uint32Array(mem,w.indices_ptr(),w.indices_len());
+  gl.clearColor(0.05,0.063,0.063,1);gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.useProgram(program);gl.uniform2f(uScreen,cw,ch);gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER,vbo);gl.bufferData(gl.ARRAY_BUFFER,vf,gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,ibo);gl.bufferData(gl.ELEMENT_ARRAY_BUFFER,ix,gl.DYNAMIC_DRAW);
+  gl.drawElements(gl.TRIANGLES,ix.length,gl.UNSIGNED_INT,0);
+  requestAnimationFrame(render);
+}
+requestAnimationFrame(render);
+</script>
+</body>
+</html>
