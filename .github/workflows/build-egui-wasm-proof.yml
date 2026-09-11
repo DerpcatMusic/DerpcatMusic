@@ -15,18 +15,20 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
-      - name: Build real egui WASM
-        run: cargo build --release --target wasm32-unknown-unknown --manifest-path egui-wasm-shape-lab/Cargo.toml
+      - name: Build real egui WASM v2
+        run: cargo build --release --target wasm32-unknown-unknown --manifest-path egui-wasm-shape-lab-v2/Cargo.toml
       - name: Package
         run: |
           mkdir -p artifact
-          cp egui-wasm-shape-lab/target/wasm32-unknown-unknown/release/egui_wasm_shape_lab.wasm artifact/app.wasm
-          cp egui-wasm-shape-lab/web/index.template.html artifact/index.template.html
-          cp egui-wasm-shape-lab/src/lib.rs artifact/lib.rs
+          cp egui-wasm-shape-lab-v2/target/wasm32-unknown-unknown/release/egui_wasm_shape_lab_v2.wasm artifact/app.wasm
+          cp egui-wasm-shape-lab-v2/web/index.template.html artifact/index.template.html
+          cp egui-wasm-shape-lab-v2/src/lib.rs artifact/lib.rs
+          cp egui-wasm-shape-lab-v2/src/style.rs artifact/style.rs
+          cp egui-wasm-shape-lab-v2/src/layout.rs artifact/layout.rs
           cp egui-wasm-shape-lab/src/geometry.rs artifact/geometry.rs
-          cp egui-wasm-shape-lab/Cargo.toml artifact/Cargo.toml
+          cp egui-wasm-shape-lab-v2/Cargo.toml artifact/Cargo.toml
       - uses: actions/upload-artifact@v4
         with:
-          name: egui-wasm-proof
+          name: egui-wasm-proof-v2
           path: artifact/
           if-no-files-found: error
