@@ -43,7 +43,18 @@ gl.enable(gl.BLEND);gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);gl.disable(gl.C
 
 function decode64(s){const raw=atob(s);const b=new Uint8Array(raw.length);for(let i=0;i<raw.length;i++)b[i]=raw.charCodeAt(i);return b}
 const bytes=decode64(WASM_BASE64);
-const {instance}=await WebAssembly.instantiate(bytes,{});
+const module=new WebAssembly.Module(bytes);
+const imports={};
+for(const entry of WebAssembly.Module.imports(module)){
+  const ns=(imports[entry.module]??={});
+  if(entry.kind==='function'){
+    ns[entry.name]=(...args)=>{
+      if(entry.name.includes('throw')) throw new Error('Rust/wasm-bindgen throw');
+      return 0;
+    };
+  }
+}
+const instance=new WebAssembly.Instance(module,imports);
 const w=instance.exports;
 if(w.magic()!==0x45475549) throw new Error('Not the expected EGUI Rust WASM module');
 if(w.egui_version_code()!==0x00360002) throw new Error('Wrong egui build: expected 0.36.2');
