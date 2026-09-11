@@ -1,0 +1,32 @@
+name: Visage egui WASM proof
+on:
+  push:
+    branches: [visage-egui-wasm-proof]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - name: Build real egui WASM
+        run: cargo build --release --target wasm32-unknown-unknown --manifest-path egui-wasm-shape-lab/Cargo.toml
+      - name: Package
+        run: |
+          mkdir -p artifact
+          cp egui-wasm-shape-lab/target/wasm32-unknown-unknown/release/egui_wasm_shape_lab.wasm artifact/app.wasm
+          cp egui-wasm-shape-lab/web/index.template.html artifact/index.template.html
+          cp egui-wasm-shape-lab/src/lib.rs artifact/lib.rs
+          cp egui-wasm-shape-lab/src/geometry.rs artifact/geometry.rs
+          cp egui-wasm-shape-lab/Cargo.toml artifact/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: egui-wasm-proof
+          path: artifact/
+          if-no-files-found: error
